@@ -68,25 +68,24 @@ public class Server {
         @Override
         public void run() {
             try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-
-                String clientMessage;
-                while ((clientMessage = reader.readLine()) != null) {
-                    System.out.println("Received encrypted message: " + clientMessage);
-                    String decryptedMessage = decryptMessage(clientMessage);
-                    System.out.println("Decrypted message: " + decryptedMessage);
-
-                    // Respond to the client
-                    String response = "Server received your message: " + decryptedMessage;
-                    String encryptedResponse = encryptMessage(response);
-                    writer.println(encryptedResponse);
-                    writer.flush();
+                try (socket) {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                    PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+                    
+                    String clientMessage;
+                    while ((clientMessage = reader.readLine()) != null) {
+                        System.out.println("Received encrypted message: " + clientMessage);
+                        String decryptedMessage = decryptMessage(clientMessage);
+                        System.out.println("Decrypted message: " + decryptedMessage);
+                        
+                        // Respond to the client
+                        String response = "Server received your message: " + decryptedMessage;
+                        String encryptedResponse = encryptMessage(response);
+                        writer.println(encryptedResponse);
+                        writer.flush();
+                    }
                 }
-
-                socket.close();
             } catch (Exception e) {
-                e.printStackTrace();
             }
         }
 

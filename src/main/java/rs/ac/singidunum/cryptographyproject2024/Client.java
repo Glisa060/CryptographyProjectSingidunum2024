@@ -115,15 +115,12 @@ public class Client {
                     System.out.println("Hash of decrypted message from server: " + hash);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
             } catch (Exception e) {
-                e.printStackTrace();
             } finally {
                 try {
                     // Close the socket gracefully
                     socket.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
                 }
             }
         }
