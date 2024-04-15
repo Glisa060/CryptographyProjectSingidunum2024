@@ -34,14 +34,28 @@ public class Server {
             Socket socket = serverSocket.accept();
             System.out.println("Client connected.");
 
-            // Send public key to client
+            // Generate RSA Key Pair for signing
+            KeyPair rsaKeyPair = generateRSAKeyPair();
+
+            // Send RSA public key to client
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(keyPair.getPublic());
+            out.writeObject(rsaKeyPair.getPublic());
             out.flush();
 
-            // Receive client's public key
+            // Receive client's Diffie-Hellman public key and its signature
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
             PublicKey clientPublicKey = (PublicKey) in.readObject();
+            byte[] clientPublicKeySignature = (byte[]) in.readObject();
+
+            // Verify client's Diffie-Hellman public key signature
+            System.out.println("Verifying client public key signature...");
+            boolean signatureVerified = verifySignature(clientPublicKey.getEncoded(), clientPublicKeySignature, rsaKeyPair.getPublic());
+            if (!signatureVerified) {
+                System.err.println("Client public key signature verification failed.");
+                throw new Exception("Client public key signature verification failed.");
+            } else {
+                System.out.println("Client public key signature verified successfully.");
+            }
 
             // Generate shared secret
             keyAgreement.doPhase(clientPublicKey, true);
@@ -71,13 +85,13 @@ public class Server {
                 try (socket) {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                     PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-                    
+
                     String clientMessage;
                     while ((clientMessage = reader.readLine()) != null) {
                         System.out.println("Received encrypted message: " + clientMessage);
                         String decryptedMessage = decryptMessage(clientMessage);
                         System.out.println("Decrypted message: " + decryptedMessage);
-                        
+
                         // Respond to the client
                         String response = "Server received your message: " + decryptedMessage;
                         String encryptedResponse = encryptMessage(response);
@@ -86,6 +100,7 @@ public class Server {
                     }
                 }
             } catch (Exception e) {
+                e.printStackTrace();
             }
         }
 
@@ -101,5 +116,18 @@ public class Server {
             byte[] encryptedBytes = aesCipher.doFinal(message.getBytes());
             return Base64.getEncoder().encodeToString(encryptedBytes);
         }
+    }
+
+    private static KeyPair generateRSAKeyPair() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
+        keyPairGen.initialize(2048);
+        return keyPairGen.generateKeyPair();
+    }
+
+    private static boolean verifySignature(byte[] data, byte[] signature, PublicKey publicKey) throws Exception {
+        Signature sig = Signature.getInstance("SHA256withRSA");
+        sig.initVerify(publicKey);
+        sig.update(data);
+        return sig.verify(signature);
     }
 }

@@ -14,6 +14,7 @@ public class CryptographyProject2024 {
             try {
                 Server.main(new String[]{});
             } catch (Exception e) {
+                e.printStackTrace();
             }
         }).start();
 
@@ -26,6 +27,7 @@ public class CryptographyProject2024 {
             try {
                 Client.main(new String[]{});
             } catch (Exception e) {
+                e.printStackTrace();
             }
         }).start();
     }
