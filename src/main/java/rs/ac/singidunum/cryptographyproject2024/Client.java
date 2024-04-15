@@ -12,7 +12,6 @@ import java.security.*;
 import java.util.*;
 
 /**
- *
  * @author Milan
  */
 public class Client {
@@ -22,6 +21,7 @@ public class Client {
     public static void main(String[] args) throws Exception {
         try (Socket socket = new Socket("localhost", 12345)) {
             System.out.println("Connected to server.");
+
             // Diffie-Hellman Key Exchange
             KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("DH");
             keyPairGen.initialize(2048);
@@ -37,19 +37,20 @@ public class Client {
 
             // Send signed public key to server
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            out.writeObject(rsaKeyPair.getPublic());
             out.writeObject(keyPair.getPublic());
             out.writeObject(signedPublicKey);
             out.flush();
-            
-            // Receive server's public key and its signature
+
+            // Receive server's public key,  RSA public key and  signature
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-            PublicKey serverPublicKey = (PublicKey) in.readObject();
+            PublicKey DHPublicKey = (PublicKey) in.readObject();
+            PublicKey rsaPublicKeyServer = (PublicKey) in.readObject();
             byte[] serverPublicKeySignature = (byte[]) in.readObject(); // Added line to read the signature
 
+
             // Verify server's public key signature
-            System.out.println("Verifying server public key signature...");
-            // Verify server's public key signature
-            boolean signatureVerified = verifySignature(serverPublicKey.getEncoded(), serverPublicKeySignature, rsaKeyPair.getPublic());
+            boolean signatureVerified = verifySignature(DHPublicKey.getEncoded(), serverPublicKeySignature, rsaPublicKeyServer);
 
             if (!signatureVerified) {
                 System.err.println("Server public key signature verification failed.");
@@ -59,7 +60,7 @@ public class Client {
             }
 
             // Generate shared secret
-            keyAgreement.doPhase(serverPublicKey, true);
+            keyAgreement.doPhase(DHPublicKey, true);
             byte[] sharedSecret = keyAgreement.generateSecret();
 
             // Derive AES key from shared secret

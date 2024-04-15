@@ -4,7 +4,6 @@
 package rs.ac.singidunum.cryptographyproject2024;
 
 /**
- *
  * @author Milan
  */
 public class CryptographyProject2024 {
@@ -13,21 +12,21 @@ public class CryptographyProject2024 {
         new Thread(() -> {
             try {
                 Server.main(new String[]{});
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
+
             }
         }).start();
 
         try {
             Thread.sleep(1000); // Delay to ensure server starts before client
-        } catch (InterruptedException e) {
+        } catch (InterruptedException ignored) {
+
         }
 
         new Thread(() -> {
             try {
                 Client.main(new String[]{});
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
             }
         }).start();
     }

@@ -12,7 +12,6 @@ import java.security.*;
 import java.util.*;
 
 /**
- *
  * @author Milan
  */
 public class Server {
@@ -20,52 +19,63 @@ public class Server {
     private static SecretKey aesKey;
 
     public static void main(String[] args) throws Exception {
-        ServerSocket serverSocket = new ServerSocket(12345);
-        System.out.println("Server started. Waiting for client...");
+        // Generate RSA Key Pair for signing
+        KeyPair rsaKeyPair = generateRSAKeyPair();
+        // Store server's public key
+        PublicKey rsaServerPublicKey = rsaKeyPair.getPublic(); // Store server's public key
+        // Store server's private key
+        PrivateKey rsaServerPrivateKey = rsaKeyPair.getPrivate(); // Store server's private key
 
-        // Diffie-Hellman Key Exchange
-        KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("DH");
-        keyPairGen.initialize(2048);
-        KeyPair keyPair = keyPairGen.generateKeyPair();
-        KeyAgreement keyAgreement = KeyAgreement.getInstance("DH");
-        keyAgreement.init(keyPair.getPrivate());
+        // Start the server socket
+        try (ServerSocket serverSocket = new ServerSocket(12345)) {
+            System.out.println("Server started. Waiting for client...");
 
-        while (true) {
-            Socket socket = serverSocket.accept();
-            System.out.println("Client connected.");
+            while (true) {
+                Socket socket = serverSocket.accept();
+                System.out.println("Client connected.");
 
-            // Generate RSA Key Pair for signing
-            KeyPair rsaKeyPair = generateRSAKeyPair();
+                // Diffie-Hellman Key Exchange
+                KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("DH");
+                keyPairGen.initialize(2048);
+                KeyPair keyPair = keyPairGen.generateKeyPair();
+                KeyAgreement keyAgreement = KeyAgreement.getInstance("DH");
+                keyAgreement.init(keyPair.getPrivate());
 
-            // Send RSA public key to client
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            out.writeObject(rsaKeyPair.getPublic());
-            out.flush();
+                // Receive client's Diffie-Hellman public key and its signature
+                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+                PublicKey rsaPublicKey = (PublicKey) in.readObject();
+                PublicKey clientPublicKey = (PublicKey) in.readObject();
+                byte[] clientPublicKeySignature = (byte[]) in.readObject();
 
-            // Receive client's Diffie-Hellman public key and its signature
-            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-            PublicKey clientPublicKey = (PublicKey) in.readObject();
-            byte[] clientPublicKeySignature = (byte[]) in.readObject();
+                // Verify client's Diffie-Hellman public key signature
+                boolean signatureVerified = verifySignature(clientPublicKey.getEncoded(), clientPublicKeySignature, rsaPublicKey);
+                if (!signatureVerified) {
+                    System.err.println("Client public key signature verification failed.");
+                    throw new Exception("Client public key signature verification failed.");
+                } else {
+                    System.out.println("Client public key signature verified successfully.");
+                }
 
-            // Verify client's Diffie-Hellman public key signature
-            System.out.println("Verifying client public key signature...");
-            boolean signatureVerified = verifySignature(clientPublicKey.getEncoded(), clientPublicKeySignature, rsaKeyPair.getPublic());
-            if (!signatureVerified) {
-                System.err.println("Client public key signature verification failed.");
-                throw new Exception("Client public key signature verification failed.");
-            } else {
-                System.out.println("Client public key signature verified successfully.");
+                byte[] signedPublicKey = signData(keyPair.getPublic().getEncoded(), rsaServerPrivateKey);
+
+                // Send signed public key to client
+                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                out.writeObject(keyPair.getPublic());
+                out.writeObject(rsaServerPublicKey);
+                out.writeObject(signedPublicKey); // Send server's signed public key to client
+                out.flush();
+
+                // Generate shared secret
+                keyAgreement.init(keyPair.getPrivate()); // Initialize with server's private key
+                keyAgreement.doPhase(clientPublicKey, true);
+                byte[] sharedSecret = keyAgreement.generateSecret();
+
+                // Derive AES key from shared secret
+                aesKey = new SecretKeySpec(sharedSecret, 0, 32, "AES");
+
+                // Start a new thread to handle client
+                new Thread(new ClientHandler(socket)).start();
             }
-
-            // Generate shared secret
-            keyAgreement.doPhase(clientPublicKey, true);
-            byte[] sharedSecret = keyAgreement.generateSecret();
-
-            // Derive AES key from shared secret
-            aesKey = new SecretKeySpec(sharedSecret, 0, 32, "AES");
-
-            // Start a new thread to handle client
-            new Thread(new ClientHandler(socket)).start();
         }
     }
 
@@ -99,8 +109,7 @@ public class Server {
                         writer.flush();
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
             }
         }
 
@@ -129,5 +138,12 @@ public class Server {
         sig.initVerify(publicKey);
         sig.update(data);
         return sig.verify(signature);
+    }
+
+    private static byte[] signData(byte[] data, PrivateKey privateKey) throws Exception {
+        Signature signature = Signature.getInstance("SHA256withRSA");
+        signature.initSign(privateKey);
+        signature.update(data);
+        return signature.sign();
     }
 }
